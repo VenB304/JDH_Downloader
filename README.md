@@ -2,6 +2,10 @@
 
 Automates Discord slash commands to fetch Just Dance asset and no-HUD video HTML from the **JDH bot**. Uses [Playwright](https://playwright.dev/) to drive a real Chromium browser, so it works with your existing Discord login.
 
+## ⚠️ Disclaimer
+
+> **This tool automates a Discord client (self-botting), which violates [Discord's Terms of Service](https://discord.com/terms).** Your account could be suspended or banned. **Use a throwaway/alt Discord account** — do not use your main account. The developers are not responsible for any account actions taken by Discord.
+
 ## What It Does
 
 For a given song codename (e.g. `TemperatureALT`), the tool:

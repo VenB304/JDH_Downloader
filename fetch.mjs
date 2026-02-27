@@ -72,17 +72,12 @@ async function sendSlashCommand(page, { command, choices = [], codename }) {
 
   // Focus the textbox
   await textbox.click();
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(200);
 
-  // Type "/" to open the command picker
-  await page.keyboard.type('/', { delay: 100 });
-  await page.waitForTimeout(800);
+  // Type "/" to open the command picker, then immediately type the command name
+  await page.keyboard.type('/' + command, { delay: 30 });
 
-  // Type the command name to filter the autocomplete list
-  await page.keyboard.type(command, { delay: 80 });
-  await page.waitForTimeout(1500);
-
-  // Click the matching command in the autocomplete popup
+  // Wait for the matching command to appear in the autocomplete popup
   const cmdOption = page.locator(SEL.autocompleteOption)
     .filter({ hasText: new RegExp(command, 'i') })
     .first();
@@ -98,7 +93,7 @@ async function sendSlashCommand(page, { command, choices = [], codename }) {
     );
   }
 
-  await page.waitForTimeout(1000);
+  await page.waitForTimeout(300);
 
   // Handle dropdown/choice parameters (e.g. game = "jdu")
   for (const choice of choices) {
@@ -126,13 +121,13 @@ async function sendSlashCommand(page, { command, choices = [], codename }) {
       }
     }
 
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(200);
   }
 
   // Type the codename into the current text parameter field
-  await page.keyboard.type(codename, { delay: 40 });
+  await page.keyboard.type(codename, { delay: 20 });
   console.log(`  Typed codename: ${codename}`);
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(200);
 
   // Send the command
   await page.keyboard.press('Enter');
@@ -141,7 +136,8 @@ async function sendSlashCommand(page, { command, choices = [], codename }) {
 
 /**
  * Poll for a new message-accessories element to appear (the bot's response).
- * Returns the id attribute of the new element.
+ * Waits for the ID to stabilize (stop changing) before returning, since Discord
+ * swaps the "Thinking..." placeholder ID with the real embed ID.
  */
 async function waitForNewEmbed(page, previousLastId, timeoutMs = 30000) {
   console.log('  Waiting for bot response...');
@@ -150,16 +146,21 @@ async function waitForNewEmbed(page, previousLastId, timeoutMs = 30000) {
   while (Date.now() - start < timeoutMs) {
     const currentId = await getLastAccessoryId(page);
     if (currentId && currentId !== previousLastId) {
-      // The bot first sends a "Thinking..." interaction response, which gets one ID,
-      // then updates it to the final embed, which gets a NEW ID.
-      // Give the embed a moment to fully render and the ID to swap.
-      await page.waitForTimeout(3000);
-
-      // Fetch the latest ID which should now be the final embed
-      const finalId = await getLastAccessoryId(page);
-      return finalId || currentId;
+      // New embed detected — now wait for the ID to stabilize (stop changing).
+      // Discord swaps the "Thinking..." ID with the final embed ID after ~1s.
+      let stableId = currentId;
+      for (let i = 0; i < 4; i++) {
+        await page.waitForTimeout(500);
+        const latestId = await getLastAccessoryId(page);
+        if (latestId === stableId) {
+          // ID hasn't changed — it's stable
+          return stableId;
+        }
+        stableId = latestId;
+      }
+      return stableId;
     }
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(300);
   }
 
   throw new Error(
@@ -194,7 +195,11 @@ async function main() {
     await page.goto(CHANNEL_URL, { waitUntil: 'domcontentloaded' });
 
     await waitForLogin(page);
-    await page.waitForTimeout(3000); // let channel messages load
+
+    // Wait for channel messages to actually load instead of a blind 3s wait
+    await page.locator(SEL.messageAccessories).first().waitFor({ timeout: 15000 }).catch(() => {
+      // Channel might be empty — that's okay, we'll continue
+    });
 
     // ---- Step 1: /assets jdu <codename> ----
     console.log('\n  [1/2] /assets jdu ' + codename);
@@ -210,7 +215,7 @@ async function main() {
     const assetsHtml = await extractHtml(page, assetsId);
     console.log('  Extracted assets embed HTML.');
 
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(500);
 
     // ---- Step 2: /nohud <codename> ----
     console.log('\n  [2/2] /nohud ' + codename);
