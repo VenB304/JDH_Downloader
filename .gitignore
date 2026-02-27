@@ -1,0 +1,16 @@
+# User config (contains your Discord channel URL)
+config.json
+
+# Browser profile (contains Discord session cookies)
+.browser-profile/
+
+# Downloaded map outputs (any codename folder)
+*/assets.html
+*/nohud.html
+
+# Dependencies
+node_modules/
+
+# Debug / temp
+test_dom.mjs
+tmpclaude*
