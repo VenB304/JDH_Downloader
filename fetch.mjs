@@ -171,6 +171,19 @@ async function waitForNewEmbed(page, previousLastId, timeoutMs = 30000) {
 
 async function extractHtml(page, accessoryId) {
   const el = page.locator(`div[id="${accessoryId}"]`);
+
+  // Wait for the embed content (child elements) to actually render inside
+  // the accessories container. Discord creates the empty div first, then
+  // populates it with the embed markup shortly after.
+  try {
+    await el.locator(':scope > *').first().waitFor({ timeout: 10000 });
+  } catch {
+    console.warn('  Warning: No child elements appeared inside the accessories div.');
+  }
+
+  // Small extra buffer to let any remaining child content finish rendering
+  await el.page().waitForTimeout(1000);
+
   return await el.evaluate((node) => node.outerHTML);
 }
 

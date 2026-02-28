@@ -6,4 +6,4 @@ if "%CODENAME%"=="" (
     exit /b 1
 )
 node "%~dp0fetch.mjs" %CODENAME%
-pause
+TIMEOUT 5
