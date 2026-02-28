@@ -139,28 +139,50 @@ async function sendSlashCommand(page, { command, choices = [], codename }) {
  * Waits for the ID to stabilize (stop changing) before returning, since Discord
  * swaps the "Thinking..." placeholder ID with the real embed ID.
  */
-async function waitForNewEmbed(page, previousLastId, timeoutMs = 30000) {
+async function waitForNewEmbed(page, previousLastId, timeoutMs = 60000) {
   console.log('  Waiting for bot response...');
   const start = Date.now();
 
+  // Wait for the last message-accessories div to:
+  //  1) have a different ID than before the command was sent
+  //  2) actually contain child elements (the real embed, not "Thinking...")
+  //  3) have a stable ID (not changing) for at least 1 second
   while (Date.now() - start < timeoutMs) {
-    const currentId = await getLastAccessoryId(page);
-    if (currentId && currentId !== previousLastId) {
-      // New embed detected — now wait for the ID to stabilize (stop changing).
-      // Discord swaps the "Thinking..." ID with the final embed ID after ~1s.
-      let stableId = currentId;
-      for (let i = 0; i < 4; i++) {
+    // Check the last accessories div in the page
+    const result = await page.evaluate((prevId) => {
+      const all = document.querySelectorAll('div[id^="message-accessories-"]');
+      if (all.length === 0) return null;
+      const last = all[all.length - 1];
+      return {
+        id: last.id,
+        hasChildren: last.children.length > 0,
+      };
+    }, previousLastId);
+
+    if (result && result.id !== previousLastId && result.hasChildren) {
+      // Found a new accessories div with content — wait for ID to stabilize
+      let stableId = result.id;
+      let stable = true;
+      for (let i = 0; i < 3; i++) {
         await page.waitForTimeout(500);
-        const latestId = await getLastAccessoryId(page);
-        if (latestId === stableId) {
-          // ID hasn't changed — it's stable
-          return stableId;
+        const latestResult = await page.evaluate(() => {
+          const all = document.querySelectorAll('div[id^="message-accessories-"]');
+          if (all.length === 0) return null;
+          const last = all[all.length - 1];
+          return { id: last.id, hasChildren: last.children.length > 0 };
+        });
+        if (!latestResult || latestResult.id !== stableId || !latestResult.hasChildren) {
+          stable = false;
+          break;
         }
-        stableId = latestId;
       }
-      return stableId;
+      if (stable) {
+        console.log(`  Bot response detected (${stableId}).`);
+        return stableId;
+      }
+      // Not stable yet, keep polling
     }
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(500);
   }
 
   throw new Error(
@@ -170,21 +192,18 @@ async function waitForNewEmbed(page, previousLastId, timeoutMs = 30000) {
 }
 
 async function extractHtml(page, accessoryId) {
-  const el = page.locator(`div[id="${accessoryId}"]`);
+  // Extra buffer to let any remaining embed content finish rendering
+  await page.waitForTimeout(1500);
 
-  // Wait for the embed content (child elements) to actually render inside
-  // the accessories container. Discord creates the empty div first, then
-  // populates it with the embed markup shortly after.
-  try {
-    await el.locator(':scope > *').first().waitFor({ timeout: 10000 });
-  } catch {
-    console.warn('  Warning: No child elements appeared inside the accessories div.');
+  const html = await page.evaluate((id) => {
+    const el = document.getElementById(id);
+    return el ? el.outerHTML : null;
+  }, accessoryId);
+
+  if (!html) {
+    throw new Error(`Could not find element with id "${accessoryId}" in the DOM.`);
   }
-
-  // Small extra buffer to let any remaining child content finish rendering
-  await el.page().waitForTimeout(1000);
-
-  return await el.evaluate((node) => node.outerHTML);
+  return html;
 }
 
 // ---------------------------------------------------------------------------
