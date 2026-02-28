@@ -146,21 +146,24 @@ async function waitForNewEmbed(page, previousLastId, timeoutMs = 60000) {
   // Wait for the last message-accessories div to:
   //  1) have a different ID than before the command was sent
   //  2) actually contain child elements (the real embed, not "Thinking...")
-  //  3) have a stable ID (not changing) for at least 1 second
+  //  3) NOT contain "Loading..." placeholder text
+  //  4) have stable ID and content for at least 1.5 seconds
   while (Date.now() - start < timeoutMs) {
     // Check the last accessories div in the page
     const result = await page.evaluate((prevId) => {
       const all = document.querySelectorAll('div[id^="message-accessories-"]');
       if (all.length === 0) return null;
       const last = all[all.length - 1];
+      const textContent = last.textContent || '';
       return {
         id: last.id,
         hasChildren: last.children.length > 0,
+        isLoading: textContent.includes('Loading'),
       };
     }, previousLastId);
 
-    if (result && result.id !== previousLastId && result.hasChildren) {
-      // Found a new accessories div with content — wait for ID to stabilize
+    if (result && result.id !== previousLastId && result.hasChildren && !result.isLoading) {
+      // Found a new accessories div with real content — wait for ID to stabilize
       let stableId = result.id;
       let stable = true;
       for (let i = 0; i < 3; i++) {
@@ -169,9 +172,14 @@ async function waitForNewEmbed(page, previousLastId, timeoutMs = 60000) {
           const all = document.querySelectorAll('div[id^="message-accessories-"]');
           if (all.length === 0) return null;
           const last = all[all.length - 1];
-          return { id: last.id, hasChildren: last.children.length > 0 };
+          const textContent = last.textContent || '';
+          return {
+            id: last.id,
+            hasChildren: last.children.length > 0,
+            isLoading: textContent.includes('Loading'),
+          };
         });
-        if (!latestResult || latestResult.id !== stableId || !latestResult.hasChildren) {
+        if (!latestResult || latestResult.id !== stableId || !latestResult.hasChildren || latestResult.isLoading) {
           stable = false;
           break;
         }
