@@ -1,3 +1,19 @@
 node_modules/
 config.json
 .browser-profile/
+
+# Downloaded map outputs (any codename folder)
+*/assets.html
+*/nohud.html
+
+# Dependencies
+node_modules/
+
+# Debug / temp
+test_dom.mjs
+tmpclaude*
+
+open_browser.mjs
+scrape_conversation.mjs
+MapDownloads/
+output/

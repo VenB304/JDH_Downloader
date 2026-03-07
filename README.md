@@ -13,7 +13,7 @@ For a given song codename (e.g. `TemperatureALT`), the tool:
 1. Opens Discord in a Chromium browser window
 2. Sends `/assets jdu <codename>` and captures the bot's embed response
 3. Sends `/nohud <codename>` and captures that embed response
-4. Saves both as HTML files in a `<codename>/` folder
+4. Saves both as HTML files in `MapDownloads/<codename>/`
 
 ## Prerequisites
 
@@ -51,7 +51,19 @@ Edit `config.json` with your Discord channel URL:
 **Command line:**
 
 ```bash
-node fetch.mjs <codename>
+node fetch.mjs [options] <codename(s)>
+
+# Fetch a single codename
+node fetch.mjs TemperatureALT
+
+# Fetch multiple codenames
+node fetch.mjs TemperatureALT Circus
+
+# Launch with the Graphical User Interface (GUI)
+node fetch.mjs --gui
+
+# Fetch multiple codenames from a text file (one codename per line)
+node fetch.mjs --batch list.txt
 ```
 
 **Windows shortcut:**
@@ -64,16 +76,17 @@ On the first run there is no saved session, so the browser will show the Discord
 
 ## Output
 
-```
-<codename>/
-├── assets.html   # Bot response from /assets jdu <codename>
-└── nohud.html    # Bot response from /nohud <codename>
+```text
+MapDownloads/
+└── <codename>/
+  ├── assets.html   # Bot response from /assets jdu <codename>
+  └── nohud.html    # Bot response from /nohud <codename>
 ```
 
 ## Troubleshooting
 
 | Problem | Solution |
-|---|---|
+| --- | --- |
 | `Could not find /assets in the autocomplete` | Make sure the JDH bot is in the server and the channel is correct in `config.json` |
 | `Timed out waiting for the bot response` | The bot may be offline. Try again later. |
 | Browser opens but nothing happens | Delete `.browser-profile/` and re-login |
