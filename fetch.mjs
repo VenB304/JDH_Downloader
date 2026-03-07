@@ -6,7 +6,7 @@ import { dirname } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const MAP_DOWNLOADS_DIR = join(__dirname, 'MapDownloads');
+const MAP_DOWNLOADS_DIR = join(__dirname, 'output');
 
 // Load config
 const config = JSON.parse(readFileSync(join(__dirname, 'config.json'), 'utf-8'));

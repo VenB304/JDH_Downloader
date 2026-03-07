@@ -14,3 +14,8 @@ node_modules/
 # Debug / temp
 test_dom.mjs
 tmpclaude*
+
+open_browser.mjs
+scrape_conversation.mjs
+MapDownloads/
+output/
