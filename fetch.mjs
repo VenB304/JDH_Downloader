@@ -10,11 +10,23 @@ const __dirname = dirname(__filename);
 // Load config
 const config = JSON.parse(readFileSync(join(__dirname, 'config.json'), 'utf-8'));
 
-// Get codename from args
-const codename = process.argv[2];
+// Parse arguments: node fetch.mjs <codename> [--output-dir <path>]
+let codename = null;
+let outputBase = null;
+
+const args = process.argv.slice(2);
+for (let i = 0; i < args.length; i++) {
+  if (args[i] === '--output-dir' && i + 1 < args.length) {
+    outputBase = args[++i];
+  } else if (!codename && !args[i].startsWith('--')) {
+    codename = args[i];
+  }
+}
+
 if (!codename) {
-  console.error('Usage: node fetch.mjs <codename>');
+  console.error('Usage: node fetch.mjs <codename> [--output-dir <path>]');
   console.error('Example: node fetch.mjs TemperatureALT');
+  console.error('         node fetch.mjs TemperatureALT --output-dir ../MapDownloads');
   process.exit(1);
 }
 
@@ -214,6 +226,45 @@ async function extractHtml(page, accessoryId) {
   return html;
 }
 
+/**
+ * Check if an embed HTML contains valid CDN links (jd-s3.cdn.ubi.com).
+ * Returns true if valid, false if it looks like a bot error response.
+ */
+function hasValidLinks(html) {
+  const cdnPattern = /href="https?:\/\/jd-s3\.cdn\.ubi\.com[^"]+"/i;
+  return cdnPattern.test(html);
+}
+
+/**
+ * Send a slash command, wait for the bot response, extract HTML, and validate.
+ * Retries up to maxRetries times if the response has no valid CDN links.
+ */
+async function fetchCommandWithRetry(page, opts, label, maxRetries = 2) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (attempt > 0) {
+      console.log(`  Retrying (attempt ${attempt + 1}/${maxRetries + 1})...`);
+      await page.waitForTimeout(3000);
+    }
+
+    const preId = await getLastAccessoryId(page);
+    await sendSlashCommand(page, opts);
+    const embedId = await waitForNewEmbed(page, preId);
+    const html = await extractHtml(page, embedId);
+
+    if (hasValidLinks(html)) {
+      console.log(`  Extracted ${label} embed HTML.`);
+      return html;
+    }
+
+    console.log(`  Warning: ${label} response has no valid CDN links (bot may have returned an error).`);
+  }
+
+  throw new Error(
+    `${label} response contained no valid download links after ${maxRetries + 1} attempts.\n` +
+    '  The bot may not have data for this codename, or the track may not exist.'
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -243,36 +294,27 @@ async function main() {
 
     // ---- Step 1: /assets jdu <codename> ----
     console.log('\n  [1/2] /assets jdu ' + codename);
-    const preAssetsId = await getLastAccessoryId(page);
 
-    await sendSlashCommand(page, {
+    const assetsHtml = await fetchCommandWithRetry(page, {
       command: 'assets',
       choices: ['jdu'],
       codename,
-    });
-
-    const assetsId = await waitForNewEmbed(page, preAssetsId);
-    const assetsHtml = await extractHtml(page, assetsId);
-    console.log('  Extracted assets embed HTML.');
+    }, 'assets');
 
     await page.waitForTimeout(500);
 
     // ---- Step 2: /nohud <codename> ----
     console.log('\n  [2/2] /nohud ' + codename);
-    const preNohudId = await getLastAccessoryId(page);
 
-    await sendSlashCommand(page, {
+    const nohudHtml = await fetchCommandWithRetry(page, {
       command: 'nohud',
       choices: [],   // nohud has no game dropdown
       codename,
-    });
-
-    const nohudId = await waitForNewEmbed(page, preNohudId);
-    const nohudHtml = await extractHtml(page, nohudId);
-    console.log('  Extracted nohud embed HTML.');
+    }, 'nohud');
 
     // ---- Save files ----
-    const outputDir = join(__dirname, codename);
+    const base = outputBase ? resolve(outputBase) : __dirname;
+    const outputDir = join(base, codename);
     if (!existsSync(outputDir)) {
       mkdirSync(outputDir, { recursive: true });
     }
@@ -280,8 +322,9 @@ async function main() {
     writeFileSync(join(outputDir, 'assets.html'), assetsHtml, 'utf-8');
     writeFileSync(join(outputDir, 'nohud.html'), nohudHtml, 'utf-8');
 
-    console.log(`\n  Saved ${codename}/assets.html`);
-    console.log(`  Saved ${codename}/nohud.html`);
+    console.log(`\n  Saved to: ${outputDir}`);
+    console.log(`  - assets.html`);
+    console.log(`  - nohud.html`);
     console.log('  Done!\n');
   } finally {
     await context.close();

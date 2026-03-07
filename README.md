@@ -24,7 +24,7 @@ For a given song codename (e.g. `TemperatureALT`), the tool:
 
 ```bash
 # 1. Clone and install dependencies
-git clone https://github.com/<your-username>/JDH_Downloader.git
+git clone https://github.com/VenB304/JDH_Downloader.git
 cd JDH_Downloader
 npm install
 
